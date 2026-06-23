@@ -1,0 +1,15 @@
+target/
+test-output/
+reports/
+videos/
+allure-results/
+allure-report/
+node_modules/
+.settings/
+.classpath
+.project
+.idea/
+*.log
+*.mp4
+*.metadata
+*.zip
