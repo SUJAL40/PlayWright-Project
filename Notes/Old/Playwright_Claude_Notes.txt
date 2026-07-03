@@ -1,0 +1,2135 @@
+Playwright Study Notes — Lecture 14 & 15
+
+
+Lecture 14 — Browser Factory Design Pattern
+
+
+What is Browser Factory?
+
+
+Browser Factory is a design pattern used to create and manage browser instances from one single place.
+Instead of writing browser launch code again and again in every test file, you write it once in a BrowserFactory class and reuse it everywhere.
+Think of it like a remote control — one remote can control any TV (Chromium, Firefox, WebKit). You don't buy a new remote for every TV.
+
+
+
+Why Do We Use It?
+
+
+Avoids code duplication — No need to write browser launch code in every test.
+Easy maintenance — If you want to change something (e.g., headless mode), you change it in one place only.
+Supports multiple browsers — Launch Chromium, Chrome, Firefox, Edge, or WebKit from one method.
+Clean architecture — Follows OOP principles like Encapsulation.
+
+
+
+Key Points to Remember
+
+
+⚡ Firefox and WebKit do NOT support --start-maximized argument. Only Chromium-based browsers (Chrome, Edge, Chromium) support it.
+⚡ For Firefox/WebKit fullscreen, you must set viewport dimensions equal to the screen resolution manually.
+⚡ Encapsulation is used by declaring playwright and browser as private static — they are hidden from outside and managed internally.
+⚡ Always call playwright.close() after tests finish. This closes all browsers and releases memory.
+🐛 Common Mistake in the original code: There was an extra orphaned browser launch line that was never assigned or closed — always make sure every launched browser is assigned to a variable and closed properly.
+
+
+java// ❌ Wrong — This launches a browser nobody uses. Wastes memory.
+playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false).setSlowMo(1000));
+
+// ✅ Correct — Assign launch result to a variable if needed, or remove this line.
+
+
+Memory Trick: Think of BrowserFactory as a car showroom — you tell it what car (browser) you want, it hands it to you ready to drive (page object).
+
+
+
+Steps to Set Up a Browser in Playwright
+
+StepActionStep 1Create Playwright instanceStep 2Launch Browser (Chromium / Firefox / WebKit)Step 3Create Browser Context (like an incognito window)Step 4Open a Page (Tab) inside the contextStep 5Navigate to URL
+
+
+Syntax
+
+java// General structure of BrowserFactory
+public class BrowserFactory {
+
+    private static Playwright playwright;  // Hidden from outside (Encapsulation)
+    private static Browser browser;
+
+    public static Page initBrowser(String browserName, boolean headless, boolean fullScreen) {
+        // Step 1: Create Playwright instance
+        playwright = Playwright.create();
+
+        // Step 2: Set launch options
+        BrowserType.LaunchOptions option = new BrowserType.LaunchOptions().setHeadless(headless);
+
+        // Step 3: Launch browser based on name
+        // Step 4: Create context
+        // Step 5: Return page
+    }
+
+    public static void closeBrowser() {
+        if (playwright != null) {
+            playwright.close();
+        }
+    }
+}
+
+
+Example (Full Working Code — Corrected)
+
+javapackage org.sujalkhot.day14;
+
+import java.awt.Dimension;
+import java.awt.Toolkit;
+import java.util.Arrays;
+
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
+
+public class BrowserFactory {
+
+    // Encapsulation: private static — managed only inside this class
+    private static Playwright playwright;
+    private static Browser browser;
+
+    public static Page initBrowser(String browserName, boolean headless, boolean fullScreen) {
+
+        // Step 1: Start Playwright server
+        playwright = Playwright.create();
+
+        // Step 2: Get physical screen size of host machine (for Firefox/WebKit fullscreen)
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        int width = (int) screenSize.getWidth();
+        int height = (int) screenSize.getHeight();
+
+        // Step 3: Set base launch options
+        BrowserType.LaunchOptions option = new BrowserType.LaunchOptions().setHeadless(headless);
+
+        // Step 4: For Chromium-based browsers, add --start-maximized if fullScreen is true
+        if (fullScreen && (browserName.equalsIgnoreCase("Chromium")
+                || browserName.equalsIgnoreCase("Chrome")
+                || browserName.equalsIgnoreCase("edge"))) {
+            option.setArgs(Arrays.asList("--start-maximized"));
+        }
+
+        // Step 5: Launch the correct browser
+        switch (browserName.toLowerCase()) {
+
+            case "chromium":
+                browser = playwright.chromium().launch(option);
+                break;
+
+            case "chrome":
+                option.setChannel("chrome");
+                browser = playwright.chromium().launch(option);
+                break;
+
+            case "edge":
+                option.setChannel("edge");
+                browser = playwright.chromium().launch(option);
+                break;
+
+            case "firefox":
+                browser = playwright.firefox().launch(option);
+                break;
+
+            case "webkit":
+                browser = playwright.webkit().launch(option);
+                break;
+
+            default:
+                throw new IllegalArgumentException("Invalid Browser: " + browserName);
+        }
+
+        // Step 6: Create Browser Context
+        BrowserContext context;
+
+        if (fullScreen && (browserName.equalsIgnoreCase("chromium")
+                || browserName.equalsIgnoreCase("chrome")
+                || browserName.equalsIgnoreCase("edge"))) {
+            // null viewport lets --start-maximized take effect
+            context = browser.newContext(new Browser.NewContextOptions().setViewportSize(null));
+
+        } else if (fullScreen && (browserName.equalsIgnoreCase("firefox")
+                || browserName.equalsIgnoreCase("webkit"))) {
+            // Firefox/WebKit: manually set viewport to screen size
+            context = browser.newContext(new Browser.NewContextOptions().setViewportSize(width, height));
+
+        } else {
+            context = browser.newContext(new Browser.NewContextOptions());
+        }
+
+        // Step 7: Open a new tab and return it
+        return context.newPage();
+    }
+
+    public static void closeBrowser() {
+        if (playwright != null) {
+            playwright.close(); // Closes all browsers and releases memory
+        }
+    }
+}
+
+
+Step-by-Step Explanation
+
+Line/BlockWhat It Doesprivate static Playwright playwrightStores the Playwright instance at class level. private = hidden from outside (Encapsulation). static = shared across all calls.Playwright.create()Starts the Playwright server internally. Must be the first step.Toolkit.getDefaultToolkit().getScreenSize()Gets the screen width and height of the machine running the tests. Used for Firefox/WebKit viewport.BrowserType.LaunchOptionsConfiguration object for launching the browser (headless or not, args, channel etc.).setArgs(Arrays.asList("--start-maximized"))Passes a Chrome/Edge/Chromium argument to open browser in maximized window.setChannel("chrome")Tells Playwright to use the installed branded Chrome instead of bundled Chromium.setViewportSize(null)For Chromium: removes fixed viewport so --start-maximized can take over.setViewportSize(width, height)For Firefox/WebKit: forces viewport to match real screen size (since --start-maximized is not supported).browser.newContext(...)Creates an isolated browser session (like incognito).context.newPage()Opens a new tab inside the context. This is what you use to interact with the website.playwright.close()Closes everything — all contexts, browsers, and the Playwright server.
+
+
+Real Project Usage
+
+
+In real automation frameworks (like Page Object Model), BrowserFactory is called in a @BeforeAll or @BeforeEach setup method.
+The returned Page object is passed to all Page Object classes.
+closeBrowser() is called in @AfterAll or @AfterEach to clean up.
+Companies use this pattern to easily switch browsers via config files without touching test code.
+
+
+
+Difference / Comparison
+
+FeatureChromium / Chrome / EdgeFirefox / WebKitFullscreen argument--start-maximized supported ✅Not supported ❌Viewport for fullscreenSet to nullSet to screen width & heightLaunch methodplaywright.chromium().launch()playwright.firefox().launch() / playwright.webkit().launch()
+
+
+Interview Questions
+
+Q1: What is the Browser Factory design pattern in Playwright?
+
+Answer: It is a design pattern where browser creation logic is centralized in one class. It avoids code duplication, supports multiple browsers, and makes the framework easy to maintain.
+
+Q2: Why do Firefox and WebKit not support --start-maximized?
+
+Answer: --start-maximized is a Chromium-specific browser argument. Firefox and WebKit have their own rendering engines and do not accept Chromium flags. To simulate fullscreen, you set the viewport size equal to the screen dimensions.
+
+Q3: What is the role of BrowserContext in Playwright?
+
+Answer: BrowserContext is like an incognito session. It is isolated from other contexts — separate cookies, storage, and sessions. Each context can have multiple pages (tabs).
+
+Q4: Why are playwright and browser declared as private static?
+
+Answer: private ensures encapsulation — these variables cannot be accessed or modified from outside the class. static means they are shared at the class level and don't need an object to be used.
+
+Q5: What happens if you don't call playwright.close()?
+
+Answer: Browser processes keep running in the background, wasting system memory and CPU. Always close Playwright after tests finish.
+
+
+Quick Revision (30 Seconds)
+
+
+Browser Factory = one place to launch all browsers.
+Firefox/WebKit don't support --start-maximized → use setViewportSize(width, height).
+Chromium fullscreen → setViewportSize(null) + --start-maximized arg.
+Always call playwright.close() at the end.
+Encapsulation: private static hides internal state.
+Steps: Create Playwright → Launch Browser → Create Context → Open Page → Navigate.
+
+
+One-Line Summary
+
+
+BrowserFactory is a reusable class that launches any browser with one method call, handles fullscreen differences, and follows OOP principles.
+
+
+
+
+
+Lecture 15 — Locators in Playwright
+
+
+What is a Locator?
+
+
+A Locator is like the address of a web element on a page — it tells Playwright exactly which element to find and interact with.
+Think of a web page like a city and elements like houses. A Locator is the GPS address that leads you to the right house.
+Playwright Locators are smart — they automatically:
+
+Wait for the element to appear (auto-wait).
+Retry if the element is not found immediately.
+Re-find the element before every action (in case the page reloaded or DOM changed).
+Ensure the element is visible before clicking/typing.
+
+
+
+
+
+
+Why Do We Use Locators?
+
+
+Web pages are dynamic — elements load at different times.
+Without Locators, your test would fail if the element takes a second to appear.
+Locators handle timing, retrying, and DOM changes automatically — less flaky tests.
+
+
+
+How to Find a Locator (Inspect Element)
+
+MethodHowRight-clickRight-click on element → InspectF12Opens DevToolsCtrl + Shift + IOpens DevTools (shortcut)Ctrl + F in DevToolsSearch for CSS or XPath in the DOM
+
+
+Types of Locators
+
+1. Built-in Playwright Locators (Recommended — Use These First)
+
+LocatorMethodExampleWhen to UseRolegetByRole()page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Submit"))Best choice — based on ARIA accessibilityLabelgetByLabel()page.getByLabel("Email")Form fields linked to <label> tagsPlaceholdergetByPlaceholder()page.getByPlaceholder("Enter email")Input fields with placeholder textTextgetByText()page.getByText("Login")Elements with visible textAlt TextgetByAltText()page.getByAltText("Company Logo")ImagesTitlegetByTitle()page.getByTitle("Close")Elements with tooltip/title attributeTest IDgetByTestId()page.getByTestId("login-btn")Elements with data-testid attribute
+
+2. CSS & XPath Locators
+
+LocatorMethodExampleCSSpage.locator()page.locator("input[type='text']")XPathpage.locator()page.locator("//input[@id='username']")Text (Playwright CSS)page.locator()page.locator("button:has-text('Submit')")
+
+3. Index-based Locators
+
+javapage.locator("button").nth(0)    // First button (0-indexed)
+page.locator("button").first()   // First matching element
+page.locator("button").last()    // Last matching element
+
+
+Locator Priority (Which to Use First)
+
+PriorityLocatorReason⭐ 1Role LocatorMost accessible, preferred by Playwright team2Label LocatorStable for forms3Placeholder LocatorGood when no ID/label4Text LocatorHuman-readable5Test ID LocatorBest for enterprise automation (developers add data-testid)6CSS LocatorFlexible, widely used7XPath LocatorUse only for complex cases
+
+
+CSS Selectors — Detailed Guide
+
+Recommended CSS Selectors (Use in Real Projects)
+
+css#username          /* ID Selector — most specific */
+.login-btn         /* Class Selector */
+input[name='email'] /* Tag + Attribute — very reliable */
+
+Full CSS Cheatsheet
+
+CSS Selector TypeExampleDescriptionID Selector#usernameSelect by ID ⚡Class Selector.login-btnSelect by class ⚡Tag + Attributeinput[name='email']Select by attribute ⚡Tag SelectorbuttonAll buttonsAttribute Only[name='email']By attribute valueMultiple Classes.btn.primaryElement with both classesParent Childdiv inputInput anywhere inside divDirect Childdiv > inputInput directly inside divFirst Childli:first-childFirst list itemLast Childli:last-childLast list itemnth Childli:nth-child(2)Second list itemHas Textbutton:has-text("Login")Button with "Login" text (Playwright only)Placeholderinput[placeholder='Username']By placeholderType Attributeinput[type='text']Text inputStarts With[id^='user']ID starts with "user"Ends With[id$='name']ID ends with "name"Contains[id*='user']ID contains "user"
+
+
+XPath — Detailed Guide
+
+Two Types of XPath
+
+TypeExampleRecommended?Absolute XPathhtml/body/div/header/a/img❌ No — breaks if page structure changesRelative XPath//img[@src='/image/Toolsqa.jpg']✅ Yes — starts with //, goes directly to element
+
+XPath Pattern
+
+//tag_name[@attribute_name="value"]
+
+Example:
+//button[@class="btn primary"]
+//input[@id='username']
+
+XPath Cheatsheet
+
+XPath TypeSyntaxExampleDescriptionRelative XPath//input//buttonMost commonly usedBy Attribute//input[@id='email']//input[@name='username']Find by attributeBy Text//button[text()='Login']//a[text()='Sign In']Exact text matchPartial Attribute//input[contains(@id,'user')]//button[contains(@class,'submit')]Dynamic attributesPartial Text//button[contains(text(),'Login')]//span[contains(text(),'Welcome')]Partial text matchStarts-With//input[starts-with(@id,'user')]//div[starts-with(@class,'card')]Attribute starts with valueAND condition//input[@type='text' and @name='email']Login email fieldBoth must be trueOR condition//input[@id='email' or @name='email']Email textboxAny one trueParent//input[@id='email']/..Parent of email fieldGo one level upChild//div[@id='form']/inputInput inside formDirect childFollowing Sibling//label[text()='Email']/following-sibling::inputEmail field next to labelNext siblingPreceding Sibling//input[@id='email']/preceding-sibling::labelLabel before inputPrevious siblingAncestor//input[@id='email']/ancestor::formParent formAll parent levelsDescendant//form[@id='login']//inputAll inputs in formAll child levelsBy Index(//input)[1]First input⚡ Index starts at 1 in XPathLast Element(//input)[last()]Last inputLast matching
+
+XPath Using Index (Collection)
+
+xpath(//xpath)[index]                         → Select by position (index starts at 1)
+(//parent-xpath)/child-tagName[index]    → Select child by position
+//tagName[@att1='v1' and @att2='v2']    → AND condition
+//tagName[@att1='v1' or @att2='v2']     → OR condition
+
+⚡ Wildcard Tag Tip
+
+If a developer changes the tag name (e.g., <input> becomes <div>), use * to match any tag:
+
+xpath//*[@type="file" or @id="fileinput"]
+// Same as: //input[@type="file" or @id="fileinput"]
+// But works even if tag name changes
+
+
+Text Locator (Playwright Unique Feature)
+
+Find elements directly using the visible text on the page.
+
+javapage.locator("text=login");                     // Matches element with visible text "login"
+page.locator("button:has-text('Submit')");      // Button containing "Submit" text
+
+
+⚡ This is unique to Playwright — Selenium does not have this.
+
+
+
+Role Locator
+
+Finds elements based on their ARIA role (Accessibility Role). This is the most recommended locator by the Playwright team.
+
+javapage.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Submit"));
+
+RoleExampleWhat it findsBUTTONgetByRole(AriaRole.BUTTON)<button> elementsLINKgetByRole(AriaRole.LINK)<a> elementsTEXTBOXgetByRole(AriaRole.TEXTBOX)<input type="text">CHECKBOXgetByRole(AriaRole.CHECKBOX)<input type="checkbox">RADIOgetByRole(AriaRole.RADIO)<input type="radio">COMBOBOXgetByRole(AriaRole.COMBOBOX)<select> dropdownsHEADINGgetByRole(AriaRole.HEADING)<h1> to <h6>IMGgetByRole(AriaRole.IMG)<img> elementsTABgetByRole(AriaRole.TAB)Tab elementsMENUITEMgetByRole(AriaRole.MENUITEM)Menu items
+
+
+📝 Note from Lecture: In real projects, Role Locators are mostly known conceptually. In practice, CSS/XPath are used more often. But knowing ARIA roles is important for interviews.
+
+
+
+
+Test ID Locator
+
+Developers add a special data-testid attribute specifically for automation testing.
+
+html<!-- Developer adds this in HTML -->
+<button data-testid="login-btn">Login</button>
+
+java// Tester uses this
+page.getByTestId("login-btn");
+
+
+⚡ Most stable locator — it doesn't change with UI redesigns.
+Used in enterprise automation frameworks.
+
+
+
+Placeholder Locator
+
+javapage.getByPlaceholder("Enter email");
+
+
+Use when input fields don't have an ID or label.
+Based on the placeholder attribute of <input> elements.
+
+
+
+Label Locator
+
+javapage.getByLabel("Email");
+
+
+Finds the input field associated with a <label> tag.
+Good for accessibility and stable form interactions.
+
+
+
+Title Locator
+
+javapage.getByTitle("Close");
+
+
+Used for buttons or icons that have a tooltip (title attribute).
+Example: close icons, info buttons.
+
+
+
+Common Actions on Locators
+
+java// Type text into a textbox
+page.getByPlaceholder("username").fill("Admin");
+
+// Click a button
+page.locator("button[type='submit']").click();
+
+// Get text content
+page.locator("#message").textContent();
+
+// Check if element is visible
+page.locator(".error").isVisible();
+
+
+Syntax Summary
+
+java// CSS Selector
+page.locator("#id");
+page.locator(".class");
+page.locator("input[name='email']");
+
+// XPath
+page.locator("//input[@id='username']");
+page.locator("(//button)[1]");
+
+// Built-in locators
+page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Submit"));
+page.getByText("Login");
+page.getByLabel("Email");
+page.getByPlaceholder("Enter email");
+page.getByAltText("Company Logo");
+page.getByTitle("Close");
+page.getByTestId("login-btn");
+
+// Index-based
+page.locator("button").nth(0);    // 0-indexed in Playwright
+page.locator("button").first();
+page.locator("button").last();
+
+
+⚡ Important: XPath index starts at 1 ((//input)[1]), but Playwright's .nth() starts at 0 (.nth(0)). Don't mix these up!
+
+
+
+
+Real Project Usage
+
+
+CSS Selectors are used most often due to speed and readability.
+XPath is used when CSS can't reach the element (e.g., need parent traversal, sibling access).
+Test ID Locator is used in companies where developers follow the practice of adding data-testid attributes.
+Role Locator is used in accessibility-focused testing.
+Text Locator is used for quick, readable tests on stable text content.
+
+
+
+Difference / Comparison
+
+FeatureCSS SelectorXPathBuilt-in (Role/Text/Label)SpeedFast ✅SlowerFast ✅ReadabilityGoodVerboseBest ✅Parent traversal❌ Not possible✅ Possible❌Sibling traversalLimited✅ Full support❌Recommended forMost casesComplex DOMsAccessibility, FormsPlaywright-specificNoNoYes ✅
+
+
+Interview Questions
+
+Q1: What is a Locator in Playwright?
+
+Answer: A Locator is an object that identifies a web element and performs actions on it. It auto-waits, retries, and re-finds elements before every action, making tests more stable.
+
+Q2: What is the difference between absolute and relative XPath?
+
+Answer: Absolute XPath starts from the root HTML element and traverses the full DOM tree — it breaks easily if any parent element changes. Relative XPath starts directly from the target element using // and is much more stable.
+
+Q3: Why is getByRole() the most preferred locator?
+
+Answer: It is based on ARIA accessibility roles, making tests semantic and aligned with how users and screen readers interact with the page. It is also the most resilient to UI changes.
+
+Q4: What is data-testid and why is it used?
+
+Answer: data-testid is a custom HTML attribute added by developers specifically for automation. It doesn't change with UI redesigns, making it the most stable locator for enterprise frameworks.
+
+Q5: What is the difference between XPath index and Playwright's .nth() index?
+
+Answer: XPath index starts at 1 — e.g., (//input)[1] is the first element. Playwright's .nth() starts at 0 — e.g., .nth(0) is the first element. This is a common interview trick question.
+
+Q6: What is the difference between page.locator("text=Login") and page.getByText("Login")?
+
+Answer: Both find elements by visible text. getByText() is the newer, recommended built-in method. locator("text=Login") is an older CSS-text syntax. Both work, but getByText() is preferred.
+
+Q7: Can CSS selectors traverse to parent elements?
+
+Answer: No. CSS selectors can only go downward (child/descendant). To access parent or sibling elements, you must use XPath.
+
+
+Quick Revision (30 Seconds)
+
+
+Locator = address of a web element. Auto-waits and retries.
+Priority: Role → Label → Placeholder → Text → TestID → CSS → XPath.
+XPath index starts at 1, Playwright .nth() starts at 0.
+CSS: use #id, .class, tag[attr='val'] — top 3 recommended.
+XPath: use relative (//tag[@attr='val']), not absolute.
+Firefox/WebKit: no --start-maximized → use viewport size.
+getByTestId() = most stable in enterprise projects.
+Always use CTRL + SHIFT + O for imports, but verify the correct package is imported.
+
+
+One-Line Summary
+
+
+Locators are smart element finders in Playwright that auto-wait, retry, and support CSS, XPath, Role, Text, Label, Placeholder, and TestID strategies — always prefer built-in locators for cleaner and more stable tests.
+
+-------------------------------------------------------------------------------------------------------------------------
+
+Playwright Study Notes — Lecture 16
+
+
+Role Locator — Deep Dive
+
+
+What is a Role Locator?
+
+
+A Role Locator finds elements using their ARIA role (Accessibility Role) and their visible name (the text you see on screen).
+It locates elements exactly the way screen readers and real users see them — not by technical IDs or classes.
+ARIA stands for Accessible Rich Internet Applications — a standard that makes web pages readable for people with disabilities (e.g., screen readers read out button names aloud).
+
+
+Memory Trick: Think of ARIA like the voice description of a button. A screen reader says "Login Button". Role Locator uses that same description to find it.
+
+
+Why Do We Use Role Locators?
+
+
+⚡ Most stable — If the developer changes the CSS class or ID of a button but keeps the visible text "Login", your test still passes.
+Aligns with real user behavior — finds elements the way humans see them.
+Recommended first by the Playwright team.
+Works even when elements use div or span tags with role="button" instead of a real <button> tag.
+
+
+
+Key Points to Remember
+
+
+⚡ Always use setName() to be specific — without it, Playwright finds all elements with that role, and if there are multiple it throws an error.
+⚡ If there are 2 or more elements with the same role + name (e.g., two "Password" fields), Playwright throws a strict mode error and shows the error in the console — it also gives suggestions on how to fix it.
+⚡ Playwright tells you how many elements matched and where they are in the error message — read the console carefully.
+Playwright finds the role using: aria-label, aria-labelledby, label text, inner text, placeholder, or associated <label> tag.
+🚫 Do NOT use .nth() in real frameworks as a fix for duplicate elements — the index can change if the page layout changes.
+
+
+
+How Playwright Finds the Role Name
+
+Playwright checks these in order to determine the visible name of an element:
+
+SourceExamplearia-label attribute<button aria-label="Login">aria-labelledby attributePoints to another element's textAssociated <label> tag<label for="username">Username</label>Inner text<button>Login</button>Placeholder<input placeholder="Enter username">
+
+
+Syntax
+
+java// Basic role locator (only when ONE element of that role exists)
+page.getByRole(AriaRole.TEXTBOX).fill("admin");
+
+// Recommended — specific with visible name
+page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Login")).click();
+
+
+Example — Full Login Automation Using Role Locators
+
+javapackage org.sujalkhot.day14;
+
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.AriaRole;
+
+public class LaunchBrowseTest {
+
+    public static void main(String[] args) {
+
+        // Launch Edge browser (non-headless, no fullscreen)
+        Page page = BrowserFactory.initBrowser("edge", false, false);
+
+        // Navigate to the test website
+        page.navigate("https://swautomationtester-dot.github.io/IshaDemoV1/");
+
+        // Find the "Username" textbox by role + name and fill it
+        page.getByRole(AriaRole.TEXTBOX, new Page.GetByRoleOptions().setName("Username")).fill("admin");
+
+        // Find the "Password" textbox by role + name and fill it
+        page.getByRole(AriaRole.TEXTBOX, new Page.GetByRoleOptions().setName("Password")).fill("admin123");
+
+        // Find the "Login" button by role + name and click it
+        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Login")).click();
+
+        // Print the current page title
+        System.out.println(page.title());
+
+        // Wait 2 seconds before closing (for visual verification)
+        page.waitForTimeout(2000);
+
+        // Close the browser
+        BrowserFactory.closeBrowser();
+    }
+}
+
+
+Step-by-Step Explanation
+
+LineWhat It DoesBrowserFactory.initBrowser(...)Launches Edge browser using the factory patternpage.navigate(url)Opens the URL in the browsergetByRole(AriaRole.TEXTBOX, ...)Finds a text input field by its ARIA role.setName("Username")Filters to the specific field whose label/text is "Username".fill("admin")Types "admin" into that fieldgetByRole(AriaRole.BUTTON, ...).setName("Login")Finds the button whose visible text is "Login".click()Clicks the buttonpage.title()Returns the current page/tab title as a Stringpage.waitForTimeout(2000)Pauses for 2 seconds (2000 ms)BrowserFactory.closeBrowser()Closes the browser and Playwright server
+
+
+Common Role Locator Examples
+
+1. TextBox
+
+html<input placeholder="Enter username">
+
+java// ❌ Not recommended — works only if ONE textbox is on the page
+page.getByRole(AriaRole.TEXTBOX).fill("admin");
+
+// ✅ Recommended — specific to the "Username" field
+page.getByRole(AriaRole.TEXTBOX, new Page.GetByRoleOptions().setName("Username")).fill("admin");
+
+2. Checkbox
+
+html<input type="checkbox"> Remember me
+
+javapage.getByRole(AriaRole.CHECKBOX).check();
+// Or specific:
+page.getByRole(AriaRole.CHECKBOX, new Page.GetByRoleOptions().setName("Remember me")).check();
+
+3. Link
+
+html<a href="/logout">Logout</a>
+
+javapage.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("Logout")).click();
+
+4. Heading
+
+html<h1>Dashboard</h1>
+
+javapage.getByRole(AriaRole.HEADING, new Page.GetByRoleOptions().setName("Dashboard"));
+
+5. Table Row (Enterprise UI — Advanced)
+
+Find a specific row and click its Edit button:
+
+java// Find the row that contains "John"
+Locator row = page.getByRole(AriaRole.ROW, new Page.GetByRoleOptions().setName("John"));
+
+// Inside that row, find and click the "Edit" button
+row.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Edit")).click();
+
+
+💡 Real project tip: This pattern is extremely useful for tables where multiple rows have "Edit" buttons. You first select the row, then select the button inside it.
+
+
+
+6. Custom div Acting as a Button
+
+html<div role="button" aria-describedby="more-info">Self-destruct</div>
+
+java// Playwright recognizes role="button" on non-button tags too
+page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Self-destruct")).click();
+
+
+Handling Duplicate Elements — Problem & Solutions
+
+Problem
+
+When multiple elements share the same role + name (e.g., "Add to Cart" button appears 10 times, or "Password" label appears twice), Playwright throws a strict mode error.
+
+Playwright will show in the console:
+
+
+How many elements matched
+Where each one is on the page
+Suggestions for how to fix the locator
+
+
+Solutions (in priority order)
+
+SolutionCodeWhen to Use✅ Use data-testidpage.getByTestId("login-password").fill("123456")Best — developer adds it✅ Use Role + specific Namepage.getByRole(AriaRole.TEXTBOX, ...).setName("Password")When label is unique✅ Use ancestor XPathpage.locator("//*[@alt='Isha Test T-Shirt']//ancestor::div//button[@class='btn primary add-btn']")For product-specific buttons⚠️ Use .nth()page.getByPlaceholder("Password").nth(1).fill("1345")Only if UI is fixed and stable❌ Avoid .nth() in frameworks—Index can change with UI updates
+
+Ancestor XPath for Product-Specific Buttons
+
+java// Find the "Add to Cart" button that belongs to a specific product
+page.locator("//*[@alt='Isha Test T-Shirt']//ancestor::div//button[@class='btn primary add-btn']").click();
+
+
+This finds the image with alt text "Isha Test T-Shirt", then goes up to its parent div (ancestor), then finds the "Add to Cart" button inside that div only.
+
+
+
+
+Best Practice Priority Order (Real Framework)
+
+PriorityLocatorWhy1getByRole()Accessibility-based, most stable2getByLabel()Stable for forms3getByPlaceholder()Good when no label4getByTestId()Best when developers add data-testid5CSS SelectorWidely supported, fast6XPathComplex DOM traversal
+
+
+
+Common Page-Level get Commands
+
+
+What Are These?
+
+
+These are methods on the Page object that retrieve information about the current page — not about individual elements.
+Useful for assertions, logging, debugging, and reporting in your test framework.
+
+
+
+Page-Level Getter Methods
+
+MethodReturn TypePurposepage.title()StringGets the current browser tab titlepage.url()StringGets the current page URLpage.content()StringGets the full HTML of the page as a stringpage.viewportSize()ViewportSizeGets the current viewport width and heightpage.context()BrowserContextGets the current browser context object
+
+
+⚡ page.context() returns an object reference (e.g., com.microsoft.playwright.impl.BrowserContextImpl@3b938003). The number at the end (memory address) changes each run — this is normal.
+
+
+
+
+Example
+
+javapackage org.sujalkhot.day16;
+
+import com.microsoft.playwright.Page;
+
+public class CommonCommands {
+
+    public static void main(String[] args) {
+
+        Page page = BrowserFactory.initBrowser("edge", false, false);
+        page.navigate("https://swautomationtester-dot.github.io/IshaDemoV1/");
+
+        System.out.println("===== Page Title =====");
+        System.out.println(page.title());        // e.g., "Isha Demo"
+
+        System.out.println("===== Page URL =====");
+        System.out.println(page.url());          // e.g., "https://swautomationtester-dot.github.io/IshaDemoV1/"
+
+        System.out.println("===== Full HTML =====");
+        System.out.println(page.content());      // Entire HTML of the page
+
+        System.out.println("===== Browser Context =====");
+        System.out.println(page.context());      // Memory reference, changes each run
+
+        BrowserFactory.closeBrowser();
+    }
+}
+
+
+
+Element-Level Getter Methods (via Locator)
+
+
+What Are These?
+
+
+These methods are called on a Locator (not on the Page) to get information about a specific element on the page.
+Used for reading values, assertions, verifying content, and debugging.
+
+
+
+Element Getter Methods
+
+MethodPurposeReal-World Uselocator.textContent()Gets all text inside element (including hidden text and extra spaces)Reading labels, headingslocator.innerText()Gets only visible text (ignores hidden text, trims whitespace better)Verifying what user actually seeslocator.innerHTML()Gets the HTML markup inside the elementDebugging, checking nested HTMLlocator.getAttribute("name")Gets the value of a specific HTML attributeReading id, class, href, src etc.locator.inputValue()Gets the current value typed in an input fieldVerifying what was filled in a formlocator.count()Returns the number of matching elementsVerifying how many products/rows exist
+
+
+Key Differences: textContent() vs innerText()
+
+FeaturetextContent()innerText()Includes hidden text✅ Yes❌ NoIncludes extra spaces✅ Yes❌ No (better trimmed)What it returnsAll text in DOMOnly visible textWhen to useWhen you need raw contentWhen you want what user sees
+
+
+⚡ Real project tip: Always use .trim() after textContent() to remove leading/trailing whitespace before comparing or printing.
+
+
+
+java// ✅ Always trim in real projects
+System.out.println(page.locator("//label[1]").textContent().trim());
+
+
+Example
+
+javapackage org.sujalkhot.day16;
+
+import com.microsoft.playwright.Page;
+
+public class GetterElement {
+
+    public static void main(String[] args) {
+
+        Page page = BrowserFactory.initBrowser("edge", true, false);  // headless = true
+        page.navigate("https://swautomationtester-dot.github.io/IshaDemoV1/");
+
+        System.out.println("===== Page Title =====");
+        System.out.println(page.title());
+
+        // textContent() — gets all text including spaces
+        System.out.println("===== textContent (with trim) =====");
+        System.out.println(page.locator("//*[@id='loginForm']/label[1]").textContent().trim());
+
+        // innerText() — gets only visible text
+        System.out.println("===== innerText (with trim) =====");
+        System.out.println(page.locator("//*[@id='loginForm']/label[1]").innerText().trim());
+
+        // innerHTML() — gets HTML inside the element
+        System.out.println("===== innerHTML =====");
+        System.out.println(page.locator("//*[@id='loginForm']/label[1]").innerHTML());
+
+        // getAttribute() — gets the value of an attribute (here: "id")
+        System.out.println("===== getAttribute(id) =====");
+        System.out.println(page.locator("//*[@id='loginForm']/label[1]/input[1]").getAttribute("id"));
+
+        // Fill the username field, then read back what was typed
+        page.getByPlaceholder("username").fill("admin");
+
+        System.out.println("===== inputValue (what was typed) =====");
+        System.out.println(page.getByPlaceholder("username").inputValue());  // Output: admin
+
+        // count() — how many label elements are inside the form
+        System.out.println("===== count of labels =====");
+        System.out.println(page.locator("//*[@id='loginForm']/label").count());
+
+        BrowserFactory.closeBrowser();
+    }
+}
+
+
+Step-by-Step Explanation
+
+LineWhat It DoesBrowserFactory.initBrowser("edge", true, false)Launches Edge in headless mode (no visible UI — runs faster)page.title()Returns the browser tab title as a String.textContent().trim()Gets all text of the element and removes leading/trailing spaces.innerText().trim()Gets only the visible text — safer for user-facing assertions.innerHTML()Returns the raw HTML inside the element — useful for debugging nested structure.getAttribute("id")Reads the id attribute of the input element inside the labelpage.getByPlaceholder("username").fill("admin")Types "admin" into the username field.inputValue()Reads back what is currently typed in the input field — confirms fill worked.count()Returns how many elements match the locator — useful for verifying list sizes
+
+
+Real Project Usage
+
+
+page.title() / page.url() — Used in assertions after navigation: assert page.url().contains("dashboard").
+textContent() / innerText() — Used to verify labels, error messages, product names.
+getAttribute() — Used to check href of links, src of images, or class for state verification.
+inputValue() — Used to verify pre-filled form data (e.g., edit profile pages).
+count() — Used to verify number of products, rows in a table, or search results.
+
+
+
+⚡ Real project tip: Always prefer Locator methods over ElementHandle methods. Locators have auto-wait and retry built in — ElementHandle does not.
+
+
+
+
+Difference / Comparison
+
+MethodOnReturnsAuto-Waitpage.title()PageTab title stringN/Apage.url()PageCurrent URL stringN/Apage.content()PageFull HTML stringN/Alocator.textContent()ElementAll text (with hidden)✅ Yeslocator.innerText()ElementVisible text only✅ Yeslocator.innerHTML()ElementInner HTML string✅ Yeslocator.getAttribute()ElementAttribute value string✅ Yeslocator.inputValue()Input ElementCurrent input value✅ Yeslocator.count()ElementsNumber of matches✅ Yes
+
+
+Interview Questions
+
+Q1: What is ARIA and why is it relevant to Playwright's Role Locator?
+
+Answer: ARIA (Accessible Rich Internet Applications) is a standard that adds accessibility metadata to HTML elements. Playwright's getByRole() uses ARIA roles to find elements — the same way screen readers and assistive technologies do. This makes tests more human-readable and resilient.
+
+Q2: What happens when multiple elements match the same role + name in Playwright?
+
+Answer: Playwright throws a strict mode violation error. It tells you how many elements matched, where they are, and suggests fixes. Solutions include using data-testid, adding a more specific name, using an ancestor XPath, or (as a last resort) .nth().
+
+Q3: What is the difference between textContent() and innerText()?
+
+Answer: textContent() returns all text inside an element including hidden text and extra spaces. innerText() returns only the visible text (what the user actually sees) and handles whitespace better. In real projects, always .trim() after textContent().
+
+Q4: Why should you avoid using .nth() in real frameworks?
+
+Answer: .nth() selects an element by its position in the DOM. If the UI changes (e.g., a new product is added before the target), the index shifts and the test breaks. It is not stable for long-term automation.
+
+Q5: How does Playwright determine the visible name of an element for getByRole()?
+
+Answer: Playwright checks in this order: aria-label attribute, aria-labelledby reference, associated <label> tag, inner text, and placeholder attribute.
+
+Q6: What is the difference between page.title() and page.url()?
+
+Answer: page.title() returns the browser tab title (the <title> tag value). page.url() returns the current full URL of the page.
+
+Q7: What does locator.count() return if no elements are found?
+
+Answer: It returns 0 — it does not throw an error. This makes it safe to use for checking if elements exist before interacting with them.
+
+Q8: When would you use locator.getAttribute("href") in a real project?
+
+Answer: To verify that a link points to the correct URL. For example: assert locator.getAttribute("href").equals("/home").
+
+
+Quick Revision (30 Seconds)
+
+
+Role Locator = find by ARIA role + visible name. Most recommended.
+Always use .setName() — without it, Playwright may match multiple elements and throw an error.
+Duplicate elements → use data-testid, specific name, or ancestor XPath. Avoid .nth() in frameworks.
+Playwright finds element names using: aria-label → aria-labelledby → <label> → inner text → placeholder.
+page.title() = tab title | page.url() = current URL | page.content() = full HTML.
+textContent() = all text (hidden + spaces) | innerText() = visible text only.
+Always .trim() after textContent() in real projects.
+locator.count() returns 0 if no match — does not throw an error.
+Prefer Locator methods over ElementHandle — they have auto-wait built in.
+
+
+One-Line Summary
+
+
+Role Locators find elements the way real users see them using ARIA roles, and Playwright's element getter methods like textContent(), inputValue(), and count() let you read and verify element data during test execution.
+
+
+
+---------------------------------------------------------------------------------------------------------------------
+
+Playwright Study Notes — Lecture 17
+
+
+Topics Covered
+
+
+XPath Best Practices (Parent-Child vs .. Traversal)
+Navigation Commands
+Page Load States
+Dynamic Elements
+Auto-Waiting
+Explicit Waits
+Retry Mechanism
+Global Timeout Settings
+Filling Input Fields (fill() vs type())
+Handling Radio Buttons
+
+
+
+1. XPath Best Practices — Parent-Child vs .. Traversal
+
+
+What Is the Issue?
+
+When writing XPath, sometimes you need to go up to a parent element and then come back down to find a sibling element. There are two ways to do this:
+
+ApproachExampleRecommended?Using .. (parent shortcut)//input[@id='email']/..❌ AvoidUsing Parent-Child path//div[@class='form-group']/input✅ Prefer
+
+
+Why Avoid .. Traversal?
+
+
+.. means "go to parent" — it works but is harder to read and more fragile.
+Long chains of ../.. (like ../..//button) become difficult to maintain.
+Other team members struggle to understand what element is being targeted.
+
+
+xpath❌ Avoid:
+//div[text()='Isha Bolt T-Shirt']/../..//button[text()='Add to cart']
+
+✅ Prefer:
+//div[@class='product-card'][.//div[text()='Isha Bolt T-Shirt']]//button[text()='Add to cart']
+
+
+Memory Trick
+
+
+.. = going up the stairs blindly.
+Parent-Child = drawing a clear map from the front door.
+
+
+
+Always write XPath that someone else can read and understand without running it.
+
+
+
+2. Navigation Commands in Playwright
+
+
+What Are Navigation Commands?
+
+Methods on the Page object that control browser navigation — loading URLs, refreshing, going back/forward, and waiting for pages to be ready.
+
+
+All Navigation Commands
+
+1. page.navigate() — Open a URL
+
+java// Basic navigation
+page.navigate("https://example.com");
+
+// With custom wait strategy — stops after HTML is parsed (faster)
+page.navigate("https://example.com",
+    new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+
+
+By default, navigate() waits until the network is idle before returning.
+
+
+
+
+2. page.reload() — Refresh the Page
+
+java// Basic reload
+page.reload();
+
+// With custom wait strategy
+page.reload(new Page.ReloadOptions().setWaitUntil(WaitUntilState.NETWORKIDLE));
+
+
+3. page.goBack() — Go to Previous Page
+
+java// Basic go back
+page.goBack();
+
+// With custom wait strategy
+page.goBack(new Page.GoBackOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+
+
+4. page.goForward() — Go to Next Page
+
+java// Basic go forward
+page.goForward();
+
+// With custom wait strategy
+page.goForward(new Page.GoForwardOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+
+
+5. page.waitForNavigation() — Wait After Clicking a Link
+
+Used when you click a link or button that triggers a page navigation and need to wait for the new page to load before continuing.
+
+javapage.waitForNavigation(() -> {
+    page.locator("text=Login").click();  // This click causes a navigation
+});
+
+
+⚡ The action that triggers navigation goes inside the lambda () -> { ... }. Playwright waits for the navigation to complete before moving to the next line.
+
+
+
+
+When to Use Which Wait Strategy?
+
+ScenarioRecommended StateWhat It MeansNormal page with simple contentLOADFull page load (HTML + images + CSS)Fast execution / performance testingDOMCONTENTLOADEDHTML parsed, no waiting for imagesReact / Angular / Vue dynamic pagesNETWORKIDLEAll API calls finished
+
+
+
+3. Page Load States
+
+
+What Are Load States?
+
+Playwright can wait at different points during page loading. You choose based on how much of the page your test needs.
+
+
+Three Load States
+
+1. DOMCONTENTLOADED — Fastest
+
+javapage.waitForLoadState(LoadState.DOMCONTENTLOADED);
+
+
+Waits until HTML is parsed and DOM is built.
+Does NOT wait for images, CSS, fonts, or API calls.
+Use when you only need the page structure (e.g., checking if a form exists).
+
+
+
+2. LOAD — Most Common
+
+javapage.waitForLoadState(LoadState.LOAD);
+
+
+Waits until HTML + images + CSS + fonts are all loaded.
+Most commonly used in real projects.
+Default behavior for most browsers.
+
+
+
+3. NETWORKIDLE — Most Thorough
+
+javapage.waitForLoadState(LoadState.NETWORKIDLE);
+
+
+Waits until no network requests are active for at least 500ms.
+Ensures all API calls and background requests have finished.
+Can make tests slower — use only when data is loaded via API.
+
+
+
+Memory Trick
+
+DOMCONTENTLOADED  →  HTML only (skeleton)
+LOAD              →  HTML + images + CSS (full body)
+NETWORKIDLE       →  API calls finished (all data loaded)
+
+
+
+4. Dynamic Elements
+
+
+What Are Dynamic Elements?
+
+Elements that are not present immediately when the page opens — they appear, change, or become enabled after some time.
+
+Common Examples
+
+SituationExampleLoads after API callSearch results appear after fetching dataAppears after animationModal popup fades inBecomes enabled laterSubmit button enables after form is filledText/value changesStatus changes from "Processing" to "Completed"Re-rendered by frameworkReact/Angular updates a component
+
+Real-World Examples
+
+
+Spinner/loader disappears after data loads.
+"Add to Cart" button appears only after product images load.
+Error message appears after form validation.
+
+
+
+
+5. Auto-Waiting in Playwright
+
+
+What Is Auto-Waiting?
+
+
+Playwright automatically waits for an element to be ready before performing any action.
+You do NOT need to manually add waits before most actions.
+
+
+What Playwright Checks Before Every Action
+
+Before click(), fill(), check(), hover(), selectOption(), etc., Playwright verifies:
+
+CheckMeaningElement existsFound in the DOMElement is visibleNot hidden or display:noneElement is enabledNot disabledElement is stableNot animating or moving
+
+
+Actions With Auto-Waiting
+
+javapage.fill("#username", "standard_user");   // Auto-waits before typing
+page.click("#login-button");               // Auto-waits before clicking
+page.check("#remember-me");               // Auto-waits before checking
+page.hover(".menu-item");                 // Auto-waits before hovering
+page.selectOption("#country", "India");   // Auto-waits before selecting
+
+
+Why NOT to Use Thread.sleep()
+
+java// ❌ Never do this
+Thread.sleep(5000);
+
+ProblemExplanationAlways waits full timeEven if element loads in 1 second, you wait 5 secondsMakes tests slowAdds unnecessary delay to every testStill unreliableIf element takes 6 seconds, test still fails
+
+java// ✅ Instead, let Playwright handle it
+page.click("#submit");  // Playwright waits automatically
+
+// ✅ Or use explicit waitFor() only when needed
+page.locator("#submit").waitFor();
+
+
+
+6. Explicit Waits
+
+
+What Are Explicit Waits?
+
+Waits you manually add for situations where auto-waiting is not enough — like waiting for a loader to disappear or for API data to appear.
+
+
+Types of Explicit Waits
+
+1. waitForSelector() — Wait for an Element
+
+java// Wait for element to appear (default: VISIBLE state)
+page.waitForSelector("#success-message");
+
+// With custom timeout (overrides the default 30s)
+page.waitForSelector("#success-message",
+    new Page.WaitForSelectorOptions().setTimeout(5000));
+
+
+waitForSelector() States
+
+StateMeaningUse CaseVISIBLEElement is visible on pageWait for popup, notificationHIDDENElement is not visibleWait for loader to disappearATTACHEDElement exists in DOM (even if hidden)Element added to pageDETACHEDElement removed from DOMElement deleted from page
+
+java// ✅ Best use: Wait for spinner/loader to disappear
+page.waitForSelector(".spinner",
+    new Page.WaitForSelectorOptions()
+        .setState(WaitForSelectorState.HIDDEN));
+
+
+2. locator.waitFor() — Wait on a Locator
+
+java// Wait for element to become visible (default)
+page.locator("#successMessage")
+    .waitFor(new Locator.WaitForOptions().setTimeout(8000));
+
+// Wait for specific state
+page.locator("#submit")
+    .waitFor(new Locator.WaitForOptions()
+        .setState(WaitForSelectorState.VISIBLE));
+
+
+⚡ Prefer locator.waitFor() over page.waitForSelector() — Locators have auto-retry built in.
+
+
+
+
+3. waitForFunction() — Wait for Custom Condition
+
+Used when you need to wait for a specific value or text to appear — something that changes after an action.
+
+java// Wait until the status element shows "Completed"
+page.waitForFunction(
+    "() => document.querySelector('#status').innerText === 'Completed'"
+);
+
+Use Cases:
+
+
+Status changes: "Processing" → "Completed"
+Counter updates after action
+Custom JS conditions
+
+
+
+4. waitForLoadState() — Wait for Page Load
+
+java// Wait until all API calls are done
+page.waitForLoadState(LoadState.NETWORKIDLE);
+
+
+Auto-Wait vs Explicit Wait — When to Use What
+
+ScenarioBest ChoiceButton Click✅ Auto-WaitInput Fill✅ Auto-WaitCheckbox Click✅ Auto-WaitDropdown Selection✅ Auto-WaitLoader Disappear⚡ Explicit Wait (HIDDEN state)API Response Loaded⚡ Explicit Wait (NETWORKIDLE)Text Changes Dynamically⚡ Explicit Wait (waitForFunction())Custom Condition⚡ Explicit Wait (waitForFunction())
+
+
+Memory Trick
+
+Auto-Wait  →  Click, Fill, Check, Hover  (normal actions)
+Explicit   →  Loader, API, Text Change, Custom  (special situations)
+
+
+
+7. Retry Mechanism in Playwright
+
+
+What Is the Retry Mechanism?
+
+
+Playwright automatically retries actions until they succeed OR the timeout is reached.
+You don't write retry logic — Playwright handles it internally.
+
+
+When Playwright Retries
+
+
+Element not in DOM yet
+Element not visible
+Element is disabled
+Page is re-rendering (React / Angular / Vue)
+DOM is updating dynamically
+
+
+
+Default Timeout = 30 Seconds
+
+javapage.click("#submit");
+// Playwright retries clicking for up to 30 seconds before failing
+
+
+Custom Timeout for One Action
+
+java// Retry clicking for 5 seconds before failing
+page.locator("#submit").click(new Locator.ClickOptions().setTimeout(5000));
+
+
+Retry with locator.waitFor() (Best Practice)
+
+java// Wait up to 8 seconds for the success message to appear
+page.locator("#successMessage")
+    .waitFor(new Locator.WaitForOptions().setTimeout(8000));
+
+page.locator("#successMessage").click();
+
+
+Why Locator Is Better Than ElementHandle for Dynamic Pages
+
+FeatureLocatorElementHandleRe-checks DOM on retry✅ Yes❌ No — stores fixed referenceAuto-wait✅ Yes❌ NoHandles dynamic elements✅ Yes❌ Can become staleRecommended by Playwright✅ Yes❌ No
+
+java// ✅ Recommended — Locator re-checks DOM every time
+Locator loginBtn = page.locator("#login");
+loginBtn.click();
+
+// ❌ Avoid — ElementHandle stores a snapshot; can become stale
+ElementHandle btn = page.querySelector("#login");
+btn.click();
+
+
+
+8. Global Timeout Settings
+
+
+Two Types of Global Timeouts
+
+java// Set timeout for ALL actions (click, fill, check, etc.)
+page.setDefaultTimeout(10000);  // 10 seconds
+
+// Set timeout ONLY for page navigation (navigate, reload, goBack, goForward)
+page.setDefaultNavigationTimeout(15000);  // 15 seconds
+
+
+⚡ These apply to all elements and actions for the lifetime of the Page object — set them once at the start of your test or in your framework setup.
+
+
+
+
+Playwright vs Selenium — Wait Comparison
+
+FeatureSeleniumPlaywrightAuto-Wait❌ No✅ YesExplicit WaitRequired oftenRarely neededThread.sleep()Commonly used❌ AvoidAPI WaitDifficultEasy (NETWORKIDLE)Dynamic ElementsMore manual workAuto-Retry built inLocator SupportBasicAdvanced with retry
+
+
+
+9. Filling Input Fields — fill() vs type()
+
+
+What Is fill()?
+
+
+Clears any existing text in the field and types the new value.
+Works with any input, textarea, or contenteditable element.
+Uses Playwright Auto-Waiting — no need for explicit waits.
+
+
+javapage.fill("#username", "standard_user");
+page.fill("#password", "secret_sauce");
+
+
+Clear an Input Field
+
+java// Pass empty string to clear the field
+page.fill("#email", "");
+
+
+Read the Current Value of an Input Field
+
+javaString value = page.inputValue("#username");
+System.out.println(value);  // Prints what is currently in the field
+
+
+What Is type()?
+
+
+Types text character by character (simulates real keyboard input).
+Does NOT clear existing text — appends to whatever is already there.
+
+
+java// Field currently has: "Hello"
+page.type("#search", " World");
+// Field now has: "Hello World"
+
+
+fill() vs type() — Comparison
+
+Featurefill()type()Clears existing text✅ Yes❌ NoAppends to existing text❌ No✅ YesSpeedFast (single operation)Slower (char by char)Simulates real typing❌ No✅ YesWhen to useMost automation scenariosSpecial typing behavior
+
+java// ✅ Best Practice — Use fill() for most cases
+page.fill("#username", "admin");
+
+// ✅ Use type() only when you need character-by-character typing
+// e.g., testing autocomplete, keyboard shortcuts, input masks
+page.type("#search", "Playwright");
+
+
+Syntax Summary
+
+java// Fill (most common)
+page.fill("#username", "admin");
+
+// Fill using locator
+page.locator("#username").fill("admin");
+
+// Fill using role
+page.getByRole(AriaRole.TEXTBOX, new Page.GetByRoleOptions().setName("Username")).fill("admin");
+
+// Fill using placeholder
+page.getByPlaceholder("Enter username").fill("admin");
+
+// Type (appends text)
+page.type("#search", "Playwright");
+
+// Clear the field
+page.fill("#email", "");
+
+// Read field value
+String val = page.inputValue("#username");
+
+
+
+10. Handling Radio Buttons
+
+
+What Is a Radio Button?
+
+
+Radio buttons let users select only one option from a group.
+Selecting one automatically deselects the others in the same group.
+
+
+html<input type="radio" name="gender" value="male">  Male
+<input type="radio" name="gender" value="female">  Female
+
+
+Select a Radio Button
+
+java// Select by value attribute
+page.check("input[value='male']");
+
+// Select by ID
+page.check("#gender-male");
+
+// Select using locator
+page.locator("input[value='male']").check();
+
+
+Verify a Radio Button Is Selected
+
+javaboolean isSelected = page.isChecked("#gender-male");
+System.out.println(isSelected);  // true = selected, false = not selected
+
+// Using locator
+boolean isSelected = page.locator("input[value='male']").isChecked();
+
+
+Uncheck (Not Typical for Radio, but Supported)
+
+javapage.uncheck("#option-a");  // Use only for checkboxes
+
+
+⚡ Radio buttons typically cannot be unchecked by clicking them again — only by selecting another option in the group.
+
+
+
+
+Real-World Examples
+
+java// Select gender
+page.check("input[value='male']");
+
+// Select department
+page.check("input[value='engineering']");
+
+// Verify selection
+boolean isEngineeringSelected = page.isChecked("input[value='engineering']");
+System.out.println(isEngineeringSelected);  // true
+
+
+check() Is Used for Both Radio and Checkbox
+
+ElementSelect MethodVerify MethodRadio Buttoncheck()isChecked()Checkboxcheck()isChecked()Uncheck Checkboxuncheck()isChecked()
+
+
+
+Interview Questions
+
+Q1: What is the difference between DOMCONTENTLOADED, LOAD, and NETWORKIDLE?
+
+Answer: DOMCONTENTLOADED waits only for HTML to be parsed — no images or API calls. LOAD waits for HTML + images + CSS + fonts. NETWORKIDLE waits until all network requests stop, including API calls. Use LOAD for most cases, NETWORKIDLE for dynamic/API-driven pages.
+
+Q2: What is Auto-Waiting in Playwright?
+
+Answer: Playwright automatically checks that an element exists, is visible, is enabled, and is stable before performing any action like click() or fill(). This reduces the need for explicit waits and makes tests more reliable.
+
+Q3: Why should we avoid Thread.sleep() in Playwright?
+
+Answer: Thread.sleep() always waits for the full duration even if the element loads earlier, making tests unnecessarily slow. It is also unreliable — if the element takes longer than the sleep duration, the test still fails. Playwright's auto-waiting handles this automatically.
+
+Q4: What is the difference between fill() and type() in Playwright?
+
+Answer: fill() clears existing text and enters a new value in one operation. type() appends text character by character without clearing existing content. Use fill() for most scenarios and type() only when simulating real keyboard input is required.
+
+Q5: How do you handle a loading spinner in Playwright?
+
+Answer: Wait for the spinner to disappear using waitForSelector() with HIDDEN state:
+
+javapage.waitForSelector(".spinner",
+    new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+
+Q6: Why is Locator preferred over ElementHandle for dynamic elements?
+
+Answer: A Locator re-queries the DOM every time it performs an action, so it handles dynamic updates correctly. An ElementHandle stores a fixed reference to an element — if the DOM updates (e.g., React re-renders), the handle becomes stale and throws an error.
+
+Q7: What is waitForNavigation() and when do you use it?
+
+Answer: waitForNavigation() wraps an action that triggers a page navigation and waits for the navigation to complete before continuing. Use it when clicking a link or button that opens a new page.
+
+Q8: What is the default timeout in Playwright and how do you change it?
+
+Answer: Default timeout is 30 seconds. You can change it globally with page.setDefaultTimeout(ms) for all actions, or page.setDefaultNavigationTimeout(ms) for navigation-only.
+
+Q9: How do you select and verify a radio button in Playwright?
+
+Answer: Select using page.check("input[value='male']") and verify using page.isChecked("input[value='male']") which returns true or false.
+
+Q10: What is the Retry Mechanism in Playwright?
+
+Answer: Playwright automatically retries actions (like click(), fill()) until the element becomes ready or the timeout is reached. This handles dynamic pages where elements load after a delay without needing manual retry logic.
+
+
+Quick Revision (30 Seconds)
+
+
+Parent-Child XPath > .. traversal — more readable, stable.
+Load states: DOMCONTENTLOADED (HTML) → LOAD (HTML+CSS+images) → NETWORKIDLE (API done).
+Auto-waiting: Playwright auto-waits before click, fill, check, hover — no Thread.sleep() needed.
+Explicit wait: Use for loaders (HIDDEN), API data (NETWORKIDLE), text changes (waitForFunction()).
+Default timeout = 30 seconds. Change with setDefaultTimeout().
+fill() = clears + types. type() = appends char by char.
+Radio buttons: check() to select, isChecked() to verify.
+Locator = re-queries DOM every time. ElementHandle = stale after DOM update.
+waitForNavigation() = use when a click triggers page navigation.
+Playwright has built-in retry — no manual retry loops needed.
+
+
+One-Line Summary
+
+
+Playwright's auto-waiting, retry mechanism, and smart explicit waits eliminate the need for Thread.sleep() and make test automation far more reliable than Selenium — use fill() for inputs, check() for radio buttons, and always prefer Locators over ElementHandles.
+
+
+
+-----------------------------------------------------------------------------------------------
+
+Playwright Study Notes — Lecture 19
+
+
+Topics Covered
+
+
+Locator vs Selenium's findElement() / findElements()
+Handling Multiple Elements — locator().all() and allTextContents()
+Common Locator Mistakes
+Alert Handling — All 5 Types
+page.onDialog() vs page.onceDialog()
+Simple Alert, Confirmation Alert, Prompt Alert
+Modern Modal / Toast Notifications
+HTTP Authentication Popup
+
+
+
+1. Locator vs Selenium's findElement() / findElements()
+
+
+What Is the Difference?
+
+Playwright does not have findElement() or findElements() like Selenium. Instead it uses the Locator API — but the concept is the same.
+
+SeleniumPlaywrightMeaningfindElement()page.locator()Find a single elementfindElements()page.locator().all()Find multiple elementsList<WebElement>List<Locator>Collection of elementsWebElementLocatorReference to an element
+
+
+Key Behavioral Difference
+
+Selenium — findElement() (Immediate Search)
+
+java// Selenium searches for the element IMMEDIATELY when this line runs
+WebElement username = driver.findElement(By.id("username"));
+username.sendKeys("venkat");
+
+
+Searches for the element right away.
+Throws NoSuchElementException if element is not found.
+No built-in waiting.
+
+
+Playwright — locator() (Deferred Search)
+
+java// Playwright creates a REFERENCE — does NOT search yet
+Locator username = page.locator("#username");
+
+// Element is searched only when this action is performed
+username.fill("venkat");
+
+
+Does not search immediately — just creates a reference.
+Searches for the element when an action is performed.
+Has Auto-Waiting built in before every action.
+
+
+
+Auto-Waiting Advantage
+
+When username.fill("venkat") runs, Playwright automatically checks:
+
+CheckMeaning✅ Element existsFound in the DOM✅ Element is visibleNot hidden✅ Element is enabledNot disabled✅ Element is stableNot animating
+
+No explicit wait needed before fill(), click(), or any action.
+
+
+Memory Trick
+
+Selenium  →  Find first, then act
+Playwright →  Create locator, act later (auto-wait handles the rest)
+
+
+
+2. Handling Multiple Elements
+
+
+Selenium Way — findElements()
+
+javaList<WebElement> products = driver.findElements(By.className("product"));
+
+for (WebElement p : products) {
+    System.out.println(p.getText());
+}
+
+
+Returns a List<WebElement>.
+Returns empty list if nothing found — no exception thrown.
+
+
+
+Playwright Way — locator().all()
+
+javaList<Locator> products = page.locator(".product").all();
+
+for (Locator p : products) {
+    System.out.println(p.textContent());
+}
+
+
+Returns a List<Locator>.
+Each item in the list is a Locator for one matching element.
+Use when you need to perform actions on each element.
+
+
+
+Faster Way — allTextContents()
+
+When you only need the text of all matching elements (no actions needed):
+
+javaList<String> productNames = page.locator(".prod-title").allTextContents();
+System.out.println(productNames);
+// Output: [Laptop, Mobile, Headphones]
+
+
+Returns a List<String> directly.
+No loop needed.
+Cleaner and faster code.
+
+
+
+When to Use What?
+
+SituationMethodClick / interact with each elementlocator().all()Just read all text valuesallTextContents()One specific element by indexlocator().nth(0)First matchlocator().first()Last matchlocator().last()
+
+
+Memory Trick
+
+One element  →  locator()
+Many elements →  locator().all()
+All texts    →  allTextContents()
+
+
+Full Example — Login + Fetch Product Titles
+
+javapackage org.sujalkhot.day19;
+
+import java.util.List;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
+
+public class FindLocator {
+
+    public static void main(String[] args) {
+
+        Page page = BrowserFactory.initBrowser("chrome", false, true);
+        page.navigate("https://swautomationtester-dot.github.io/IshaDemoV1/");
+
+        // Login
+        page.locator("#username").fill("admin");
+        page.locator("#password").fill("admin123");
+        page.locator(".btn.primary").click();  // ✅ Correct CSS — two classes
+
+        // Method 1: Loop through all product titles using locator().all()
+        List<Locator> productTitle = page.locator(".prod-title").all();
+        for (Locator title : productTitle) {
+            System.out.println(title.textContent());
+        }
+
+        System.out.println("***************************************************");
+
+        // Method 2: Get all text at once using allTextContents()
+        List<String> titletext = page.locator(".prod-title").allTextContents();
+        System.out.println(titletext);
+
+        BrowserFactory.closeBrowser();
+    }
+}
+
+
+3. Common Locator Mistakes
+
+
+❌ Space vs . in CSS Class Selectors
+
+java// ❌ WRONG — Space between classes = "btn primary" is treated as DESCENDANT selector
+//    Looks for an element with class "primary" INSIDE an element with class "btn"
+page.locator(".btn primary").click();  // Throws error: element not found
+
+// ✅ CORRECT — No space = element must have BOTH classes "btn" AND "primary"
+page.locator(".btn.primary").click();
+
+
+⚡ Interview Tip: .btn.primary = one element with two classes. .btn primary = an element with class primary that is a child of .btn. These are completely different!
+
+
+
+
+Handling Duplicate Elements (Same Locator Matches Multiple)
+
+java// ❌ Throws error if more than one submit button exists
+page.locator("[type='submit']").click();
+
+// ✅ Use first(), last(), or nth() to be specific
+page.locator("[type='submit']").first();     // First match
+page.locator("[type='submit']").nth(1);      // Second match (0-indexed)
+page.locator("[type='submit']").nth(2);      // Third match
+page.locator("[type='submit']").last();      // Last match
+
+
+⚡ Note: .nth() is 0-indexed in Playwright — .nth(0) is the first element, .nth(1) is the second.
+
+
+
+
+
+4. Alert Handling — All 5 Types
+
+
+Types of Alerts
+
+TypeDescriptionButtonsSimple AlertShows a messageOK onlyConfirmation AlertAsks yes/no questionOK + CancelPrompt AlertAsks for text inputText box + OK + CancelModern Modal / ToastPart of the web page UI (not a browser alert)Custom HTML buttonsHTTP Auth PopupBrowser-level login popupUsername + Password + Sign In
+
+
+How Playwright Handles Browser Alerts (Types 1–3)
+
+Playwright uses event listeners instead of Selenium's switchTo().alert():
+
+java// Selenium way (OLD)
+driver.switchTo().alert().accept();
+
+// Playwright way (NEW — no switchTo needed)
+page.onDialog(dialog -> {
+    dialog.accept();
+});
+
+
+Useful Dialog Methods
+
+MethodWhat It Doesdialog.message()Returns the alert text messagedialog.accept()Clicks OK (also used for Prompt — sends empty string)dialog.accept("text")Clicks OK with typed text (for Prompt alerts)dialog.dismiss()Clicks Cancel
+
+
+5. page.onDialog() vs page.onceDialog()
+
+
+page.onDialog() — Permanent Listener
+
+javapage.onDialog(dialog -> {
+    System.out.println("Alert: " + dialog.message());
+    dialog.accept();
+});
+
+
+Stays active forever until the page is closed or listener is removed.
+Handles every dialog that appears.
+Risk: may accidentally accept dialogs you didn't expect.
+
+
+
+page.onceDialog() — One-Time Listener
+
+javapage.onceDialog(dialog -> {
+    System.out.println("Alert: " + dialog.message());
+    dialog.accept();
+});
+page.click("#deleteButton");  // Only the next dialog is handled
+
+
+Handles only the next dialog.
+Automatically removed after use.
+Safer and more predictable.
+
+
+
+Comparison Table
+
+Featurepage.onDialog()page.onceDialog()Listener TypePermanentOne-TimeDialogs HandledAll dialogsNext dialog onlyAuto Removed❌ No✅ YesSafetyMediumHigh ✅Best UseGlobal / many alertsSpecific test action
+
+
+⚡ CRITICAL: Always Register the Listener BEFORE Clicking
+
+java// ✅ CORRECT ORDER — Register first, then click
+page.onceDialog(dialog -> {
+    dialog.accept();
+});
+page.click("#alertButton");   // Alert appears → listener is ready → handles it
+
+// ❌ WRONG ORDER — Click first, then try to register
+page.click("#alertButton");   // Alert appears IMMEDIATELY — no listener yet!
+page.onceDialog(dialog -> {   // Too late — browser is blocked, test hangs
+    dialog.accept();
+});
+
+Why?
+
+
+JavaScript alerts are blocking — when an alert appears, the browser freezes and no further actions can be executed.
+Playwright must already be listening before the alert appears.
+Wrong order = test hangs → timeout → test fails.
+
+
+Memory Trick:
+
+First Listen  →  onceDialog()
+Then Click    →  click()
+Alert Appears →  Playwright handles it automatically
+
+
+6. Alert Types — Code Examples
+
+
+Type 1: Simple Alert (OK only)
+
+java// Register listener BEFORE clicking
+page.onceDialog(dialog -> {
+    System.out.println("Alert message: " + dialog.message());
+    dialog.accept();  // Click OK
+});
+page.locator("#nativeAlert").click();
+
+
+Type 2: Confirmation Alert (OK + Cancel)
+
+java// Accept (click OK)
+page.onceDialog(dialog -> {
+    System.out.println(dialog.message());
+    dialog.accept();   // Click OK
+});
+page.click("#nativeConfirm");
+System.out.println("Accepted");
+
+// Dismiss (click Cancel)
+page.onceDialog(dialog -> {
+    System.out.println(dialog.message());
+    dialog.dismiss();  // Click Cancel
+});
+page.click("#nativeConfirm");
+System.out.println("Dismissed");
+
+
+Type 3: Prompt Alert (Text Input + OK/Cancel)
+
+java// Pass text to be entered in the prompt input box
+page.onDialog(dialog -> {
+    System.out.println(dialog.message());
+    dialog.accept("Playwright Java");  // Types "Playwright Java" and clicks OK
+});
+page.click("#nativePrompt");
+
+
+⚡ For Prompt alerts, pass your text inside dialog.accept("your text"). If you call dialog.accept() with no argument, an empty string is submitted. dialog.dismiss() clicks Cancel.
+
+
+
+
+7. Modern Modal / Toast Notifications
+
+
+What Are These?
+
+
+Not browser alerts — they are HTML elements built into the web page.
+They can be inspected in DevTools like any other element.
+Handle them using regular Locators — not onDialog().
+
+
+java// Click a modal button
+page.locator("#modernConfirm").click();
+page.locator("#modalOk").click();      // Click OK inside the modal
+// OR
+page.locator("#modalCancel").click();  // Click Cancel inside the modal
+
+// Read the toast message
+String toastMessage = page.locator("//*[@id='toastContainer']/div").innerText();
+System.out.println("Toast Message: " + toastMessage);
+
+
+How to Find a Toast Message Element (It Disappears Quickly)
+
+Since toast messages are visible for only a short time, use this trick to freeze the page and inspect the element:
+
+
+Open DevTools (F12)
+Go to Sources tab
+Expand Event Listener Breakpoints
+Enable Keyboard (or Mouse events)
+Perform the action that triggers the toast
+When the toast appears, press F8 to pause/freeze the page
+Switch to the Elements tab and inspect the toast element
+Find its class or ID (e.g., #toastContainer, .toast.success.show)
+Press the Resume (▶) button to unfreeze
+
+
+
+⚡ When OK, Cancel, and Error toasts share the same ID, use a more specific XPath:
+page.locator("//*[@id='toastContainer']/div").innerText()
+
+
+
+
+Full Alert Handling Example
+
+javapackage org.sujalkhot.day19;
+
+import com.microsoft.playwright.Page;
+
+public class AlertsHandling {
+
+    public static void main(String[] args) {
+
+        Page page = BrowserFactory.initBrowser("chrome", false, true);
+        page.navigate("https://swautomationtester-dot.github.io/VRQA/labs/alerts.html");
+
+        // --- Simple Alert ---
+        page.onceDialog(dialog -> {
+            System.out.println("Alert message: " + dialog.message());
+            dialog.accept();
+        });
+        page.locator("#nativeAlert").click();
+
+        // --- Confirmation Alert: Accept ---
+        page.onceDialog(dialog -> {
+            System.out.println(dialog.message());
+            dialog.accept();
+        });
+        page.click("#nativeConfirm");
+        System.out.println("Accepted");
+
+        // --- Confirmation Alert: Dismiss ---
+        page.onceDialog(dialog -> {
+            System.out.println(dialog.message());
+            dialog.dismiss();
+        });
+        page.click("#nativeConfirm");
+        System.out.println("Dismissed");
+
+        // --- Prompt Alert ---
+        page.onDialog(dialog -> {
+            System.out.println(dialog.message());
+            dialog.accept("Playwright Java");
+        });
+        page.click("#nativePrompt");
+
+        // --- Modern Modal / Toast ---
+        page.locator("#modernConfirm").click();
+        page.locator("#modalCancel").click();
+        String toastMessage = page.locator("//*[@id='toastContainer']/div").innerText();
+        System.out.println("Toast Message: " + toastMessage);
+
+        BrowserFactory.closeBrowser();
+    }
+}
+
+
+8. HTTP Authentication Popup
+
+
+What Is It?
+
+
+A browser-native username/password popup that appears before the page loads.
+Used for Basic Authentication (HTTP-level, not page-level).
+NOT an HTML element — cannot be inspected in DevTools.
+NOT a JavaScript alert — onDialog() does not work for it.
+
+
+
+Why Normal Methods Don't Work
+
+MethodWorks for HTTP Auth?page.locator()❌ Not in DOMdialog.accept()❌ Not a JS alertpage.click()❌ Browser is blockedpage.fill()❌ Not accessible
+
+
+How Playwright Handles It
+
+Credentials are provided at the BrowserContext level before navigating — Playwright automatically sends them and the popup never appears.
+
+
+Method 1: Pass Credentials in URL (Not Recommended)
+
+java// ❌ Old style — credentials visible in URL, security risk
+page.navigate("https://admin:admin@the-internet.herokuapp.com/basic_auth");
+
+
+Works but is not recommended — credentials are exposed in the URL and logs.
+
+
+
+Method 2: Using BrowserContext Credentials (Recommended ✅)
+
+javapackage org.sujalkhot.day19;
+
+import java.util.Arrays;
+import com.microsoft.playwright.*;
+
+public class HandlingAuth {
+
+    public static void main(String[] args) {
+
+        Playwright playwright = Playwright.create();
+
+        Browser browser = playwright.chromium().launch(
+            new BrowserType.LaunchOptions()
+                .setHeadless(false)
+                .setArgs(Arrays.asList("--start-maximized"))
+                .setSlowMo(1000)
+        );
+
+        // ✅ Recommended: Pass credentials at context level
+        BrowserContext context = browser.newContext(
+            new Browser.NewContextOptions()
+                .setViewportSize(null)
+                .setHttpCredentials("admin", "admin")  // Username, Password
+        );
+
+        Page page = context.newPage();
+        page.navigate("https://the-internet.herokuapp.com/basic_auth");
+
+        // The auth popup is bypassed — page loads directly
+    }
+}
+
+
+Step-by-Step Explanation
+
+LineWhat It DoesPlaywright.create()Starts the Playwright server.setHeadless(false)Opens visible browser window.setSlowMo(1000)Slows actions by 1 second for visibility.setHttpCredentials("admin", "admin")Provides HTTP auth username and password at context level.setViewportSize(null)Lets --start-maximized take effectcontext.newPage()Opens a new tab in the authenticated contextpage.navigate(url)Browser automatically sends credentials — popup never appears
+
+
+Memory Trick
+
+JS Alert      →  onDialog()
+HTML Popup    →  locator()
+HTTP Auth     →  BrowserContext .setHttpCredentials()
+
+
+
+Difference / Comparison — All Alert Types
+
+Alert TypePart of DOM?How to InspectPlaywright MethodSimple Alert❌ NoCannot inspectonDialog() + dialog.accept()Confirmation Alert❌ NoCannot inspectonDialog() + accept() / dismiss()Prompt Alert❌ NoCannot inspectonDialog() + dialog.accept("text")Modern Modal / Toast✅ YesDevTools Elements tablocator() + click() / innerText()HTTP Auth Popup❌ NoCannot inspectBrowserContext.setHttpCredentials()
+
+
+Interview Questions
+
+Q1: How is page.locator() different from Selenium's findElement()?
+
+Answer: Selenium's findElement() immediately searches for the element and throws an exception if not found. Playwright's locator() creates a deferred reference — it searches for the element only when an action is performed, with auto-waiting built in.
+
+Q2: How do you get all elements matching a locator in Playwright?
+
+Answer: Use page.locator(".selector").all() which returns a List<Locator>. If you only need the text values, use allTextContents() which returns a List<String> without needing a loop.
+
+Q3: What is the difference between .btn primary and .btn.primary in CSS?
+
+Answer: .btn.primary selects an element that has both classes "btn" AND "primary". .btn primary (with a space) is a descendant selector — it selects an element with class "primary" that is nested inside an element with class "btn". These are completely different selectors.
+
+Q4: What is the difference between page.onDialog() and page.onceDialog()?
+
+Answer: page.onDialog() is a permanent listener that handles all dialogs throughout the page lifecycle. page.onceDialog() handles only the next dialog and is automatically removed after use, making it safer for specific test scenarios.
+
+Q5: Why must you register the dialog listener BEFORE clicking the button that triggers an alert?
+
+Answer: JavaScript alerts are blocking — when they appear, the browser freezes and no further JavaScript can execute. Playwright must already be listening for the dialog event before the alert appears, otherwise the test hangs and times out.
+
+Q6: How do you handle a Prompt alert in Playwright?
+
+Answer: Use dialog.accept("your text") inside the dialog listener. The text passed to accept() is typed into the prompt input box and OK is clicked. dialog.dismiss() clicks Cancel without entering text.
+
+Q7: What is the difference between a browser alert and a modern modal/toast?
+
+Answer: Browser alerts (Simple, Confirmation, Prompt) are native browser popups — they are not in the DOM and cannot be inspected. Modern modals and toasts are HTML elements built into the page — they can be inspected and handled using regular Playwright locators.
+
+Q8: How does Playwright handle HTTP Basic Authentication?
+
+Answer: HTTP Auth popups are browser-native and not part of the DOM. Playwright bypasses them by providing credentials at the BrowserContext level using .setHttpCredentials("username", "password") when creating the context, before navigating to the page.
+
+Q9: Why is passing credentials in the URL (like https://user:pass@site.com) not recommended?
+
+Answer: Credentials in the URL are exposed in browser history, server logs, and test reports — this is a security risk. The recommended approach is BrowserContext.setHttpCredentials().
+
+Q10: What does allTextContents() return and when should you use it?
+
+Answer: It returns a List<String> containing the text content of all matching elements. Use it when you only need to read text values (no actions needed) — it's faster and cleaner than looping through locator().all().
+
+
+Quick Revision (30 Seconds)
+
+
+Playwright uses locator() instead of findElement() — deferred search with auto-wait.
+Multiple elements: locator().all() for actions, allTextContents() for text only.
+.btn.primary ≠ .btn primary — no space = both classes, space = descendant selector.
+.nth() is 0-indexed in Playwright.
+Always register onDialog() / onceDialog() BEFORE the click that triggers the alert.
+onDialog() = permanent (all dialogs). onceDialog() = one-time (next dialog only).
+Prompt alert: dialog.accept("text"). Cancel: dialog.dismiss().
+Modern modals/toasts: use locators — they ARE in the DOM.
+HTTP Auth: use BrowserContext.setHttpCredentials("user", "pass").
+Freeze toast with F8 in DevTools Sources tab to inspect it before it disappears.
+
+
+One-Line Summary
+
+
+Playwright replaces Selenium's findElement() with a deferred auto-waiting Locator API, handles all browser alert types via onDialog() / onceDialog(), and bypasses HTTP Authentication at the BrowserContext level — making alert handling simpler and more reliable than Selenium.
+
+
+
+
+Notes prepared from Playwright Video Lecture 19 | Format: GitHub Markdown
