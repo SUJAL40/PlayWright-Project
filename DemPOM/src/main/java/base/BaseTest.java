@@ -1,5 +1,8 @@
 package base;
 
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
@@ -13,6 +16,7 @@ public class BaseTest {
 	protected BrowserContext context;
 	protected Page page;
 
+	@BeforeMethod
 	public void setup() {
 		playwright = Playwright.create();
 
@@ -22,6 +26,7 @@ public class BaseTest {
 		context = browser.newContext();
 	}
 
+	@AfterMethod
 	public void tearDown() {
 		context.close();
 		browser.close();
