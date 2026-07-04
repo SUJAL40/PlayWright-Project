@@ -269,94 +269,961 @@ $ page.navigate("https://google.com");
 ----------------------------------------------------------------------------------------------------------------------------
  												 Lecture 3
 
-#) Steps to Create a Maven Project in Eclipse/STS
- 1. Prerequisites: Ensure Java and Eclipse or Spring Tool Suite (STS) are installed.
- 
- 2. Navigation: Go to File > New > Maven Project.
-   - Note: If "Maven Project" is not visible, click on "Other" at the bottom and search for "Maven" > "Maven Project".
+lec-4 (DAY-3)
+
+-> Start project in eclipse / STS
+   File -> New -> Maven Project (If Not Avl. at bottom go 
+                                 other option & click on 
+                                 Maven - Maven Project)
+
+.) First install java & eclipse / STS
+   Next - click on
+   Group id - Folder Name - Playwright java
+   Artifact id - Actual project - PlaywrightjavaDemo.
+                 Name
+       Version: 1.0.0   ->  Click on Finish
+
+-> Why maven project : Directly by Adding dependency 
+                       we add directly get libraries
+
+.) In pom.xml write <dependencies> </dependencies>
+   & Add Playwright dependency in it.
+
+.) We get all dependency from maven dependency.
+
+.) In maven project we have folders
+   src/main/java       ] - Development team
+   src/main/resource
+   src/test/java       ] - Testing team
+   src/test/resource
+
+.) for testing we can use any folder
+
+-> create package in src/test/java.
+   Name: day1      (Start with small letter)
+   then inside create class
+   Class : LaunchBrowser (Class Always with capital letter /
+                          Camel Case)
+
+.) Playwright } is an interface.
+   Browser    }
+---
+-> lec-5 - Day-4
+
+* Operator in java.
+  - Unary operator
+        +       Unary plus + a
+        -       Unary minus - a
+.) We can declare variable in one line.
+   int Ten = 10, Twenty = 20;
+
+* Control statement
+.) In switch statement - "expression" must be type 
+                         byte, short, int, or char, String.
+
+                 if-else                  switch
+   supports      <, >, <=, !=             ==
+
+- Use if-else when:
+  -> You need to evaluate range or complex condition (x>10 && 
+                                                      x<20)
+  -> The variable can't be used in switch (like 
+                             double, boolean etc)
+
+- Use switch when:
+  -> You're checking a single variable against fixed constant 
+                                                        value
+  -> It improves readability in case like menu option, 
+     days of week etc
+	 
+.) Automation Tester shortcut                                       (5)
    
- 3. Project Configuration:
-   - Group ID: Defines the folder name (e.g., PlaywrightJava).
-   - Artifact ID: Defines the actual project name (e.g., PlaywrightJavaDemo).
-   - Version: Set to 1.0.0.
-   
- 4. Completion: Click Finish.
- 
-#) Why Use a Maven Project?
--> Maven allows you to manage project dependencies automatically. 
-  Instead of manually downloading JAR files, you simply add the required dependency to your pom.xml file,
-  and Maven will download the necessary libraries for you.
-	- Adding Dependencies: Open the pom.xml file and add your dependencies inside the <dependencies> tag:
-   
-   <dependencies>
-   
-   </dependencies>
-   
-   
-- Source of Dependencies: You can retrieve all required dependency information from the Maven Repository.
+   UI scenario                     Java Condition
+.) Check if button visible         if
+.) Success vs Failure              if-else
+.) Multiple error message          else-if
+.) logged in AND is admin          nested if
+.) Select action based on          switch.
+   browser type
 
-#) Maven Project Folder Structure
-A standard Maven project organizes code into specific directories:
+eg. switch(browser) {
 
-- src/main/java 	 : Main application source code (Development team) 
-- src/main/resources : Configuration files/resources (Development team) 
-- src/test/java  	 : Test source code (Testing team) 
-- src/test/resources : Test configuration files (Testing team)
- 
-- Note: While these are standard conventions, you can technically use any folder for your testing code.
+      case "chromium": browserType=playwright.chromium;
+                       break;
 
-- Create package in src/test/java
-	Name : day1  	(package name start with lowser case letter)
-	
-	then inside create class
-	class : LaunchBroswer (class Always Start with UpperCase letter / CamelCase Letter)
-	
-- Playwright and Browser is an interface
-	
-	
+      case "Firefox" : browserType=playwright.firefox();
+                       break;
+
+      case "webkit"  : browserType = playwright.webkit();
+                       break;
+    }
+
+- lec 6  DAY-5.
+
+* Loops  .) For each Loop
+.) This for loop also works with an array of same datatype.
+   syntax: for(type variable: array or collection) {
+                        // code to be executed.
+           }
+.) Real time eg: Automation example
+   Loop locater list -> validate text.
+
+* Summary:
+loop            Easy Meaning                  When to Use
+
+For             Fixed repetitions             know count
+while           Repeat until cond^ ends       Unknown count
+do-while        Do at least once              Minimum 1 execution
+for-each        Loop items directly           list, arrays
+
+- lec 7, DAY-6                       * Break. = Exit
+---                                  -> Automation Uses
+- Jump statement.                       - You found what you need
+  break & continue                      - No need to continue loop
+                                        - Error condition
+* continue. = skip one & go.            - stop after matching one 
+-> Automation uses                        element.
+   - Skip unwanted value.
+   - Skip blanks in a form
+   - skip hidden elements in 
+       playwright.
+
+* Array in java:
+- Array is object with Fixed size.
+-) Real Automation example
+
+   String[] browsers = {"chrome", "firefox", "edge"};
+   for(String browser : browsers) {
+       Syout ("Launching browser: " + browser)
+       // Initialize WebDriver based on browser
+   }
+
+* Array Utility with Array class
+  java.util.Arrays     Arrays.sort(num);
+                       sout(Arrays.toString(num));
+                                 // [10, 20, 30, 40]
+
+* Practice tasks for selenium/playwright learner                 (6)
+
+.) store multiple URLs in an array and navigate to 
+   them using driver.get()
+.) store xpath of buttons and click each one.
+.) store login credentials in a 2D array and test 
+   logins for each.
+.) Read dropdown value into an array and verify 
+   Expected option.
+.) Use For loop to validate text of multiple elements.
+
+eg
+   String[][] credentials = { {"user1", "pass1"},
+                              {"user2", "pass2"}
+                            };
+
+   for(int i=0; i<credentials.length; i++) {
+       driver.findElement(By.id("username")).sendKeys
+                              (credentials[i][0]);
+       ---------------------("password").___
+                              (credentials[i][1]);
+       driver.findElement(By.id("loginBtn")).click();
+       driver.navigate().refresh();
+   }
+
+- lec 8   DAY-7
+===       ===
+
+* Constructor
+
+- When Its main job is to initialize (set initial value for)
+  the object.
+  like default value for instance variable etc.
+- Default value           -) constructor overloading.
+
+  int      => 0              public class PerConst {
+  double   => 0.0                 int id;
+  boolean  => false               String name;
+String(object) => null
+                                  PerConst() {
+
+                                  }
+                                  PerConst(int id) {
+                                    this.id = id;
+                                  }
+                                  PerConst(int id, String name) {
+                                    this.id = id;
+                                    this.name = name;
+                                  }
+                             }
+
+* Access specifier:
+
+                                            (other pkg)
+Access Specifier     same class  same package  subclass      other
+                                                             world
+public                  ✓             ✓             ✓             ✓
+
+protected               ✓             ✓             ✓             X
+
+default                 ✓             ✓             X             X
+
+private                 ✓             X             X             X
 
 
+public: anywhere
+protected: Family + package i.e. package & subclass
+default: package only.
+private: only me  : class only.
 
+DAY 8 - STRING, STRINGBUILDER, STRINGBUFFER
 
+==================================================
+STRING
+==================================================
 
+- String is a class present in java.lang package.
+- String objects are immutable (cannot be changed).
+- String literals are stored in String Constant Pool (SCP).
 
+==================================================
+Creating Strings
+==================================================
 
+1. String Literal (Recommended)
 
+String s1 = "Playwright";
+String s2 = "Playwright";
 
+- Stored in String Constant Pool.
+- Reuses existing object if value already exists.
+- Memory efficient.
 
+--------------------------------------------------
 
+2. Using new Keyword
 
+String s3 = new String("Playwright");
 
+- Stored in Heap Memory.
+- Creates a new object every time.
+- More memory usage.
 
+==================================================
+Common String Methods
+==================================================
 
+length()               → Returns length
 
+charAt(index)          → Returns character
 
+substring(start,end)   → Extract part of string
 
+equals()               → Case-sensitive comparison
 
+equalsIgnoreCase()     → Ignore case comparison
 
+contains()             → Check text exists
 
+toUpperCase()          → Convert to uppercase
 
+toLowerCase()          → Convert to lowercase
 
+replace()              → Replace text
 
+indexOf()              → First occurrence
 
+lastIndexOf()          → Last occurrence
 
+trim()                 → Remove spaces
 
+concat()               → Join strings
 
+split()                → Split string
 
+startsWith()           → Check starting text
 
+endsWith()             → Check ending text
 
+isEmpty()              → Check empty string
 
+compareTo()            → Compare strings
 
+String.valueOf()       → Convert primitive to String
 
+String.join()          → Join multiple strings
 
+==================================================
+String.valueOf()
+==================================================
 
+String str = String.valueOf(123);
 
+Output:
 
+"123"
 
+Used to convert int, double, etc. into String.
 
+==================================================
+String vs StringBuilder vs StringBuffer
+==================================================
 
+Feature            String      StringBuilder      StringBuffer
 
+Mutability         No          Yes                Yes
 
+Thread Safe        Yes         No                 Yes
+
+Performance        Slow        Fastest            Slower
+
+Storage            SCP/Heap    Heap               Heap
+
+==================================================
+StringBuilder
+==================================================
+
+- Mutable.
+- Not synchronized.
+- Faster.
+- Best for single-threaded applications.
+
+Example:
+
+StringBuilder sb = new StringBuilder();
+
+sb.append("Play");
+sb.append("wright");
+
+==================================================
+StringBuffer
+==================================================
+
+- Mutable.
+- Synchronized.
+- Thread-safe.
+- Used in multi-threaded applications.
+
+Example:
+
+StringBuffer sb = new StringBuffer();
+
+sb.append("Play");
+sb.append("wright");
+
+==================================================
+Methods of StringBuilder/StringBuffer
+==================================================
+
+append()
+
+insert()
+
+replace()
+
+delete()
+
+reverse()
+
+toString()
+
+capacity()
+
+length()
+
+==================================================
+Memory Trick
+==================================================
+
+String
+→ Immutable
+→ Safe
+→ SCP
+
+StringBuilder
+→ Mutable
+→ Fast
+→ Single Thread
+
+StringBuffer
+→ Mutable
+→ Thread Safe
+→ Multi Thread
+
+==================================================
+Interview Question
+==================================================
+
+Q. Difference between StringBuilder and StringBuffer?
+
+A.
+StringBuilder is not synchronized, faster, and used in single-threaded environments.
+StringBuffer is synchronized, thread-safe, and used in multi-threaded environments.
+
+==================================================
+DAY 9 - ENCAPSULATION
+==================================================
+
+What is Encapsulation?
+
+Encapsulation means wrapping data (variables) and methods into a single unit and restricting direct access to data.
+
+Simple Definition:
+
+Hide Data + Control Access = Encapsulation
+
+==================================================
+Why Encapsulation?
+==================================================
+
+- Data Security
+- Controlled Access
+- Better Maintenance
+- Data Validation
+- Cleaner Code
+
+==================================================
+Rules of Encapsulation
+==================================================
+
+1. Make variables private
+
+2. Access them using public methods
+
+   Getter → Read Data
+
+   Setter → Update Data
+
+==================================================
+Example
+==================================================
+
+class Account {
+
+    private int balance;
+
+    public int getBalance() {
+        return balance;
+    }
+
+    public void setBalance(int amount) {
+
+        if(amount > 0) {
+            balance = amount;
+        }
+    }
+}
+
+==================================================
+Using Encapsulation
+==================================================
+
+public class TestAccount {
+
+    public static void main(String[] args) {
+
+        Account acc = new Account();
+
+        acc.setBalance(5000);
+
+        System.out.println(acc.getBalance());
+    }
+}
+
+==================================================
+Getter and Setter
+==================================================
+
+Getter
+
+- Used to read data
+
+Example:
+
+getBalance()
+
+--------------------------------------------------
+
+Setter
+
+- Used to modify data
+
+Example:
+
+setBalance()
+
+==================================================
+Encapsulation in Playwright POM
+==================================================
+
+public class LoginPage {
+
+    private Page page;
+
+    public LoginPage(Page page) {
+        this.page = page;
+    }
+
+    public void login(String user,
+                      String pass) {
+
+        page.fill("#user-name", user);
+
+        page.fill("#password", pass);
+
+        page.click("#login-button");
+    }
+}
+
+Test Class:
+
+LoginPage login =
+        new LoginPage(page);
+
+login.login(
+        "standard_user",
+        "secret_sauce");
+
+==================================================
+Memory Trick
+==================================================
+
+private Variable
+
++
+
+public Getter
+
++
+
+public Setter
+
+=
+
+Encapsulation
+
+==================================================
+Interview Question
+==================================================
+
+Q. What is Encapsulation?
+
+A.
+Encapsulation is an OOP concept that wraps data and methods into a single unit and restricts direct access to data using private variables and public getter/setter methods.
+
+Formula:
+
+Encapsulation =
+Private Variables + Public Methods
+
+DAY 10 - INHERITANCE, POLYMORPHISM, ABSTRACTION
+
+==================================================
+INHERITANCE
+==================================================
+
+Definition:
+
+Inheritance is an OOP concept where one class acquires the properties and methods of another class.
+
+It promotes:
+
+✓ Code Reusability
+✓ Maintainability
+✓ Less Code Duplication
+
+Syntax:
+
+class ChildClass extends ParentClass {
+
+}
+
+==================================================
+Important Terms
+==================================================
+
+Class
+→ Blueprint of an object
+
+Super Class / Parent Class
+→ Class whose properties are inherited
+
+Sub Class / Child Class
+→ Class that inherits properties
+
+Example:
+
+class Animal {
+
+    void eat() {
+        System.out.println("Eating");
+    }
+}
+
+class Dog extends Animal {
+
+    void bark() {
+        System.out.println("Barking");
+    }
+}
+
+Dog d = new Dog();
+
+d.eat();
+d.bark();
+
+==================================================
+Types of Inheritance
+==================================================
+
+1. Single Inheritance
+
+A → B
+
+One child inherits one parent.
+
+--------------------------------------------------
+
+2. Multilevel Inheritance
+
+A → B → C
+
+Child becomes parent for another class.
+
+--------------------------------------------------
+
+3. Hierarchical Inheritance
+
+      A
+     / \
+    B   C
+
+Multiple children inherit one parent.
+
+--------------------------------------------------
+
+4. Multiple Inheritance
+
+Not supported through classes.
+
+Supported using Interfaces.
+
+--------------------------------------------------
+
+5. Hybrid Inheritance
+
+Combination of inheritance types.
+
+Supported using Interfaces.
+
+==================================================
+Multiple Inheritance using Interface
+==================================================
+
+interface Printable {
+    void print();
+}
+
+interface Scannable {
+    void scan();
+}
+
+class AllInOne
+        implements Printable, Scannable {
+
+    public void print() {
+        System.out.println("Printing");
+    }
+
+    public void scan() {
+        System.out.println("Scanning");
+    }
+}
+
+==================================================
+Inheritance in Playwright Framework
+==================================================
+
+BaseTest
+   ↓
+LoginTest
+   ↓
+DashboardTest
+
+Benefits:
+
+✓ Common setup reused
+✓ Common utilities reused
+✓ Less duplicate code
+
+==================================================
+Interview Question
+==================================================
+
+Q. Why doesn't Java support multiple inheritance through classes?
+
+A.
+Because it creates ambiguity (Diamond Problem). Java supports multiple inheritance through interfaces.
+
+==================================================
+POLYMORPHISM
+==================================================
+
+Definition:
+
+Polymorphism means:
+
+"One thing, many forms"
+
+The same method behaves differently based on object or parameters.
+
+==================================================
+Types of Polymorphism
+==================================================
+
+1. Compile Time Polymorphism
+
+(Method Overloading)
+
+--------------------------------------------------
+
+2. Runtime Polymorphism
+
+(Method Overriding)
+
+==================================================
+Method Overloading
+==================================================
+
+Same method name
+
+Different parameter list
+
+Decided at compile time
+
+Example:
+
+public class ScreenshotUtil {
+
+    public static void capture(Page page) {
+
+    }
+
+    public static void capture(
+            Page page,
+            String testName) {
+
+    }
+}
+
+Benefits:
+
+✓ Reusable methods
+✓ Flexible implementation
+
+==================================================
+Method Overriding
+==================================================
+
+Child class provides its own implementation of parent method.
+
+Decided during execution.
+
+Example:
+
+class Browser {
+
+    void launch() {
+        System.out.println("Browser");
+    }
+}
+
+class Chrome extends Browser {
+
+    @Override
+    void launch() {
+        System.out.println("Chrome Browser");
+    }
+}
+
+Browser br = new Chrome();
+
+br.launch();
+
+==================================================
+How Used in Playwright?
+==================================================
+
+Method Overloading
+
+✓ Screenshot utility
+
+✓ Login utility
+
+✓ Report utility
+
+Method Overriding
+
+✓ Browser Factory
+
+✓ Page Objects
+
+✓ Base Framework Classes
+
+==================================================
+Interview Question
+==================================================
+
+Q. How did you use Polymorphism in Playwright?
+
+A.
+I used method overloading for reusable utilities like screenshots and login methods, and runtime polymorphism through method overriding in browser factory and framework classes.
+
+==================================================
+ABSTRACTION
+==================================================
+
+Definition:
+
+Abstraction means hiding implementation details and showing only essential functionality.
+
+Example:
+
+You drive a car.
+
+You know:
+
+✓ Start
+✓ Stop
+✓ Brake
+
+You don't know the internal engine implementation.
+
+==================================================
+Types of Abstraction
+==================================================
+
+1. Abstract Class
+
+Partial Abstraction
+
+--------------------------------------------------
+
+2. Interface
+
+100% Abstraction
+
+==================================================
+Abstract Class Example
+==================================================
+
+abstract class Browser {
+
+    abstract void launch();
+
+    void close() {
+        System.out.println("Closing Browser");
+    }
+}
+
+class Chrome extends Browser {
+
+    @Override
+    void launch() {
+        System.out.println("Launching Chrome");
+    }
+}
+
+Browser br = new Chrome();
+
+br.launch();
+
+br.close();
+
+==================================================
+Interface Example
+==================================================
+
+interface BrowserFactory {
+
+    void startBrowser();
+}
+
+class ChromiumBrowser
+        implements BrowserFactory {
+
+    @Override
+    public void startBrowser() {
+
+        System.out.println(
+                "Starting Chromium");
+    }
+}
+
+BrowserFactory browser =
+        new ChromiumBrowser();
+
+browser.startBrowser();
+
+==================================================
+Why Use Abstraction?
+==================================================
+
+✓ Security
+
+✓ Flexibility
+
+✓ Reusability
+
+✓ Maintainability
+
+==================================================
+Abstract Class vs Interface
+==================================================
+
+Abstract Class
+
+✓ Can have abstract methods
+
+✓ Can have normal methods
+
+✓ Can have constructor
+
+✓ Can have static methods
+
+--------------------------------------------------
+
+Interface
+
+✓ Used for complete abstraction
+
+✓ Supports multiple inheritance
+
+✓ Contains method contracts
+
+==================================================
+Interview Question
+==================================================
+
+Q. What is abstraction?
+
+A.
+Abstraction is the process of hiding implementation details and exposing only essential functionalities to the user. In Java, it can be achieved using abstract classes and interfaces.
+
+==================================================
+Parallel Execution
+==================================================
+
+Purpose:
+
+✓ Reduce execution time
+
+✓ Run tests simultaneously
+
+✓ Faster CI/CD execution
+
+Memory Trick:
+
+Parallel Execution
+=
+Speed Up Tests
 
 
 
